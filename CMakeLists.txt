@@ -14,9 +14,11 @@ endif()
 add_executable(retro
   src/main.c
   src/vec.c
-  src/game.c
+  src/graphics.c
+  src/collision.c
 
   src/games/snake.c
+  src/games/pong.c
 )
 
 target_include_directories(retro PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

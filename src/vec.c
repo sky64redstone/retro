@@ -43,6 +43,11 @@ vec2_t vec2_round(vec2_t v) {
   return (vec2_t){ roundf(v.x), roundf(v.y) };
 }
 
+vec2_t vec2_norm(vec2_t v) {
+  float len = vec2_len(v);
+  return (vec2_t){ v.x / len, v.y / len };
+}
+
 float vec2_len(vec2_t v) {
   return hypotf(v.x, v.y);
 }

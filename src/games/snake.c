@@ -14,8 +14,8 @@
 #define MAX_LENGTH (BOARD_WIDTH * BOARD_HEIGHT)
 #define SPEED_SEC 0.3f
 
-static void snake_init(game_t* game);
-static void snake_reset(game_t* game);
+static void snake_init(game_t* game, vec2_t win_size);
+static void snake_reset(game_t* game, vec2_t win_size);
 static void snake_update(game_t* game, input_t* input, float dt);
 static void snake_render(game_t* game, SDL_Renderer* renderer);
 static void snake_destroy(game_t* game);
@@ -26,18 +26,9 @@ const struct game snake_template = {
   .update = snake_update,
   .render = snake_render,
   .destroy = snake_destroy,
-  .data = NULL
-};
-
-enum direction {
-  UP, DOWN, LEFT, RIGHT
-};
-
-enum gamestate {
-  GAME_RUNNING,
-  GAME_OVER,
-  GAME_PAUSED,
-  GAME_WON
+  .data = NULL,
+  .state = GAME_RUNNING,
+  .color_bg = { 30, 30, 40, 255 }
 };
 
 struct snake_data {
@@ -49,7 +40,7 @@ struct snake_data {
   } snake;
   vec2_t food_pos;
   float accumulator;
-  enum gamestate state;
+  vec2_t win_size;
 };
 
 typedef struct snake_data snake_data_t;
@@ -63,30 +54,30 @@ static color_t color_menu = { 30, 30, 40, 255 };
 static color_t color_white = { 255, 255, 255, 255 };
 
 /* internal functions */
-static void snake_data_init(snake_data_t* data);
+static void snake_data_init(snake_data_t* data, vec2_t win_size);
 static void snake_new_food(snake_data_t* data);
 static void snake_update_dir(snake_data_t* data, input_t* input);
-static void snake_update_body(snake_data_t* data);
+static void snake_update_body(game_t* game);
 static int snake_contains(snake_data_t* data, vec2_t pos);
 
-static void snake_init(game_t* game) {
+static void snake_init(game_t* game, vec2_t win_size) {
   assert(game);
   assert(!game->data);
 
   snake_data_t* data = calloc(1, sizeof(snake_data_t));
   game->data = data;
 
-  snake_data_init(data);
+  snake_data_init(data, win_size);
 
   srand(time(NULL));
 }
 
-static void snake_reset(game_t* game) {
+static void snake_reset(game_t* game, vec2_t win_size) {
   assert(game);
   assert(game->data);
 
   memset(game->data, 0, sizeof(snake_data_t));
-  snake_data_init((snake_data_t*)game->data);
+  snake_data_init((snake_data_t*)game->data, win_size);
 }
 
 static void snake_update(game_t* game, input_t* input, float dt) {
@@ -95,21 +86,21 @@ static void snake_update(game_t* game, input_t* input, float dt) {
 
   snake_data_t* data = (snake_data_t*)game->data;
 
-  switch (data->state) {
+  switch (game->state) {
     case GAME_RUNNING: {
       data->accumulator += dt;
 
       snake_update_dir(data, input);
       
       if (input->pressed[KEY_PAUSE]) {
-        data->state = GAME_PAUSED;
+        game->state = GAME_PAUSED;
         break;
       }
 
       if (data->accumulator >= SPEED_SEC) {
         data->snake.dir = data->snake.next;
 
-        snake_update_body(data);
+        snake_update_body(game);
 
         if (vec2_equal(data->snake.body[0], data->food_pos)) {
           snake_new_food(data);
@@ -125,17 +116,17 @@ static void snake_update(game_t* game, input_t* input, float dt) {
     case GAME_OVER:
     case GAME_WON: {
       if (input->pressed[KEY_ACTION]) {
-        game->reset(game);
+        game->reset(game, data->win_size);
       }
       break;
     }
     case GAME_PAUSED: {
       if (input->pressed[KEY_PAUSE]) {
-        data->state = GAME_RUNNING;
+        game->state = GAME_RUNNING;
       }
       break;
     }
-  } /* switch (data->state) */
+  } /* switch (game->state) */
 }
 
 static void snake_render(game_t* game, SDL_Renderer* renderer) {
@@ -176,12 +167,12 @@ static void snake_render(game_t* game, SDL_Renderer* renderer) {
   pos = vec2_scale(data->snake.body[0], BOARD_SCALE);
   render_rect(renderer, pos, size, color_head);
 
-  if (data->state != GAME_RUNNING) {
+  if (game->state != GAME_RUNNING) {
     pos = vec2_scale(vec2(BOARD_WIDTH, BOARD_HEIGHT), BOARD_SCALE / 6.f);
     size = vec2_scale(pos, 4);
     render_rect(renderer, pos, size, color_menu);
 
-    if (data->state == GAME_PAUSED) {
+    if (game->state == GAME_PAUSED) {
       render_text(
         renderer,
         vec2(
@@ -204,9 +195,8 @@ static void snake_render(game_t* game, SDL_Renderer* renderer) {
         "PRESS <PAUSE> TO CONTINUE",
         ALIGN_MIDDLE
       );
-      SDL_SetRenderScale(renderer, 1.f, 1.f);
     }
-    else if (data->state == GAME_OVER) {
+    else if (game->state == GAME_OVER) {
       render_text(
         renderer,
         vec2(
@@ -230,7 +220,7 @@ static void snake_render(game_t* game, SDL_Renderer* renderer) {
         ALIGN_MIDDLE
       );
     }
-    else if (data->state == GAME_WON) {
+    else if (game->state == GAME_WON) {
       render_text(
         renderer,
         vec2(
@@ -265,7 +255,7 @@ static void snake_destroy(game_t* game) {
   game->data = NULL;
 }
 
-static void snake_data_init(snake_data_t* data) {
+static void snake_data_init(snake_data_t* data, vec2_t win_size) {
   int start_x = BOARD_WIDTH / 4;
   int start_y = BOARD_HEIGHT / 2;
 
@@ -283,7 +273,8 @@ static void snake_data_init(snake_data_t* data) {
     .food_pos = {
       start_x + 5, start_y
     },
-    .accumulator = 0.f
+    .accumulator = 0.f,
+    .win_size = win_size
   };
 }
 
@@ -307,7 +298,9 @@ static void snake_update_dir(snake_data_t* data, input_t* input) {
   }
 }
 
-static void snake_update_body(snake_data_t* data) {
+static void snake_update_body(game_t* game) {
+  snake_data_t* data = (snake_data_t*)game->data;
+
   for (int i = data->snake.length - 1; i > 0; i--) {
     data->snake.body[i] = data->snake.body[i - 1];
   }
@@ -324,12 +317,12 @@ static void snake_update_body(snake_data_t* data) {
 
   /* out of bounds */
   if (head->x < 0 || head->x >= BOARD_WIDTH) {
-    data->state = GAME_OVER;
+    game->state = GAME_OVER;
     printf("game over x %f\n", head->x);
   }
 
   if (head->y < 0 || head->y >= BOARD_HEIGHT) {
-    data->state = GAME_OVER;
+    game->state = GAME_OVER;
     printf("game over y %f\n", head->y);
   }
 
@@ -338,7 +331,7 @@ static void snake_update_body(snake_data_t* data) {
   /* and it should be impossible to collide with odd body parts */
   for (int i = 4; i < data->snake.length; i += 2) {
     if (vec2_equal(data->snake.body[i], *head)) {
-      data->state = GAME_OVER;
+      game->state = GAME_OVER;
       printf("game over snake %i\n", i);
     }
   }

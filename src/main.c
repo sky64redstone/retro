@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "games/snake.h"
+#include "games/pong.h"
+#include "vec.h"
 
 static enum key key_from_scancode(SDL_Scancode scancode) {
   switch (scancode) {
@@ -34,14 +36,14 @@ static enum key key_from_scancode(SDL_Scancode scancode) {
   }
 }
 
-
 int main(int argc, char** argv) {
   SDL_Window* window = NULL;
   SDL_Renderer* renderer = NULL;
   SDL_Event event;
-  game_t snake;
+  game_t game;
   input_t input;
   bool running = true;
+  const vec2_t win_size = vec2(800, 640);
 
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     SDL_Log("SDL_Init failed: %s", SDL_GetError());
@@ -50,11 +52,9 @@ int main(int argc, char** argv) {
 
   if (!SDL_CreateWindowAndRenderer(
     "Retro Games",
-    800,
-    640,
+    win_size.x, win_size.y,
     0,
-    &window,
-    &renderer
+    &window, &renderer
   )) {
     SDL_Log("CreateWindowAndRenderer failed: %s", SDL_GetError());
     SDL_Quit();
@@ -65,10 +65,10 @@ int main(int argc, char** argv) {
     SDL_Log("Failed to enable VSync: %s", SDL_GetError());
   }
 
-  memcpy(&snake, &snake_template, sizeof(game_t));
+  memcpy(&game, &pong_template, sizeof(game_t));
   memset(&input, 0, sizeof(input_t));
 
-  snake.init(&snake);
+  game.init(&game, win_size);
 
   Uint64 previous_time = SDL_GetTicksNS();
 
@@ -113,17 +113,19 @@ int main(int argc, char** argv) {
       delta_time = 0.1f;
     }
 
-    snake.update(&snake, &input, delta_time);
+    game.update(&game, &input, delta_time);
 
-    SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
+    SDL_SetRenderDrawColor(renderer,
+      game.color_bg.r, game.color_bg.g, game.color_bg.b, 255
+    );
     SDL_RenderClear(renderer);
 
-    snake.render(&snake, renderer);
+    game.render(&game, renderer);
 
     SDL_RenderPresent(renderer);
   }
 
-  snake.destroy(&snake);
+  game.destroy(&game);
 
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
