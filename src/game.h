@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 
 #include "vec.h"
-#include "color.h"
 #include "graphics.h"
 #include "input.h"
 #include "collision.h"

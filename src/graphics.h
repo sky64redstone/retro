@@ -1,6 +1,13 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <stdint.h>
+
+struct color {
+  uint8_t r, g, b, a;
+};
+
+typedef struct color color_t;
 
 enum alignment {
   ALIGN_LEFT,
