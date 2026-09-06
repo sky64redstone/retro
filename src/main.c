@@ -4,7 +4,30 @@
 
 #include "games/snake.h"
 #include "games/pong.h"
+#include "games/tetris.h"
 #include "vec.h"
+
+struct game_template {
+  const game_t* game;
+  const char* menu_name;
+  const SDL_Scancode scancode;
+} games[] = {
+  {
+    &snake_template,
+    "Key 0: Snake",
+    SDL_SCANCODE_0
+  },
+  {
+    &pong_template,
+    "Key 1: Pong",
+    SDL_SCANCODE_1
+  },
+  {
+    &tetris_template,
+    "Key 2: Tetris",
+    SDL_SCANCODE_2
+  }
+};
 
 static enum key key_from_scancode(SDL_Scancode scancode) {
   switch (scancode) {
@@ -63,8 +86,12 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  if (!SDL_SetRenderVSync(renderer, 1)) {
-    SDL_Log("Failed to enable VSync: %s", SDL_GetError());
+  if (!SDL_SetRenderVSync(renderer, 4)) {
+    SDL_Log("Warning: Failed to enable VSync 4: %s", SDL_GetError());
+    /* fallback to vsync if the driver doesn't support rendering ¼ vsync*/
+    if (!SDL_SetRenderVSync(renderer, 1)) {
+      SDL_Log("Warning: Failed to enable VSync 1: %s", SDL_GetError());
+    }
   }
 
   Uint64 previous_time = SDL_GetTicksNS();
@@ -90,20 +117,19 @@ int main(int argc, char** argv) {
           } else {
             /* TODO cleanup */
             if (menu) {
-              switch (event.key.scancode) {
-                case SDL_SCANCODE_0: {
-                  memcpy(&game, &snake_template, sizeof(game_t));
-                  menu = false;
-                  break;
-                }
-                case SDL_SCANCODE_1: {
-                  memcpy(&game, &pong_template, sizeof(game_t));
+              for (int i = 0; i < sizeof(games) / sizeof(struct game_template); i++) {
+                if (event.key.scancode == games[i].scancode) {
+                  memcpy(&game, games[i].game, sizeof(game_t));
                   menu = false;
                   break;
                 }
               }
               if (!menu) {
                 game.init(&game, win_size);
+                /* reenable vsync */
+                if (!SDL_SetRenderVSync(renderer, 1)) {
+                  SDL_Log("Warning: Failed to enable VSync 1: %s", SDL_GetError());
+                }
               }
               break;
             }
@@ -111,6 +137,10 @@ int main(int argc, char** argv) {
             if (event.key.scancode == SDL_SCANCODE_BACKSPACE && !menu) {
               game.destroy(&game);
               menu = true;
+              /* render only at a fourth of the display refresh rate */
+              if (!SDL_SetRenderVSync(renderer, 4)) {
+                SDL_Log("Warning: Failed to enable VSync 4: %s", SDL_GetError());
+              }
             }
           }
           break;
@@ -149,22 +179,16 @@ int main(int argc, char** argv) {
         ALIGN_MIDDLE
       );
 
-      render_text(
-        renderer,
-        vec2(10, 75),
-        vec2_splat(2.f),
-        color_text,
-        "Key 0: Snake",
-        ALIGN_LEFT
-      );
-      render_text(
-        renderer,
-        vec2(10, 95),
-        vec2_splat(2.f),
-        color_text,
-        "Key 1: Pong",
-        ALIGN_LEFT
-      );
+      for (int i = 0; i < sizeof(games) / sizeof(struct game_template); i++) {
+        render_text(
+          renderer,
+          vec2(10, 75 + i * 15),
+          vec2_splat(2.f),
+          color_text,
+          games[i].menu_name,
+          ALIGN_LEFT
+        );
+      }
 
     } else {
       game.update(&game, &input, delta_time);

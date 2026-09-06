@@ -27,7 +27,7 @@ const struct game snake_template = {
   .render = snake_render,
   .destroy = snake_destroy,
   .data = NULL,
-  .state = GAME_RUNNING,
+  .state = GAME_PAUSED,
   .color_bg = { 30, 30, 40, 255 }
 };
 
