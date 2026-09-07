@@ -68,7 +68,8 @@ static void tetris_render_piece(
   SDL_Renderer* renderer,
   const tetris_piece_t* type,
   int rotation,
-  vec2_t pos
+  vec2_t pos,
+  float accumulator
 );
 
 static void tetris_init(game_t* game, vec2_t win_size) {
@@ -217,7 +218,8 @@ static void tetris_render(game_t* game, SDL_Renderer* renderer) {
         renderer,
         data->active.type,
         data->active.rotation,
-        data->active.pos
+        data->active.pos,
+        data->accumulator
       );
       break;
     }
@@ -250,7 +252,8 @@ static void tetris_render(game_t* game, SDL_Renderer* renderer) {
         renderer,
         data->active.type,
         data->active.rotation,
-        data->active.pos
+        data->active.pos,
+        data->accumulator
       );
 
       vec2_t pos = vec2_scale(vec2(WIDTH * SCALE, 0), 0.5f);
@@ -281,7 +284,8 @@ static void tetris_render(game_t* game, SDL_Renderer* renderer) {
         renderer,
         data->active.type,
         data->active.rotation,
-        data->active.pos
+        data->active.pos,
+        data->accumulator
       );
 
       vec2_t pos = vec2_scale(vec2(WIDTH * SCALE, 0), 0.5f);
@@ -481,7 +485,8 @@ static void tetris_render_piece(
   SDL_Renderer* renderer,
   const tetris_piece_t* type,
   int rotation,
-  vec2_t pos
+  vec2_t pos,
+  float accumulator
 ) {
   for (int i = 0; i < 16; i++) {
     if (!type->layout[rotation][i]) {
@@ -496,13 +501,18 @@ static void tetris_render_piece(
     if (global_x < 0 || global_x >= WIDTH ||
       global_y < 0 || global_y >= HEIGHT) {
       continue;
-      }
+    }
 
-      render_rect(
-        renderer,
-        vec2_scale(vec2(global_x, global_y), SCALE),
-                  vec2_splat(SCALE),
-                  type->color
-      );
+    vec2_t pos = vec2_scale(vec2(global_x, global_y), SCALE);
+    float animation = accumulator / SPEED_SEC;
+    animation = animation < 0 ? 0 : animation > 1.f ? 1.f : animation;
+    pos.y -= (1.f - animation) * SCALE;
+
+    render_rect(
+      renderer,
+      pos,
+      vec2_splat(SCALE),
+      type->color
+    );
   }
 }
