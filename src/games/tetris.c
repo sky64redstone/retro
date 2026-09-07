@@ -246,6 +246,13 @@ static void tetris_render(game_t* game, SDL_Renderer* renderer) {
       break;
     }
     case GAME_OVER: {
+      tetris_render_piece(
+        renderer,
+        data->active.type,
+        data->active.rotation,
+        data->active.pos
+      );
+
       vec2_t pos = vec2_scale(vec2(WIDTH * SCALE, 0), 0.5f);
 
       render_text(
@@ -270,6 +277,13 @@ static void tetris_render(game_t* game, SDL_Renderer* renderer) {
       break;
     }
     case GAME_WON: {
+      tetris_render_piece(
+        renderer,
+        data->active.type,
+        data->active.rotation,
+        data->active.pos
+      );
+
       vec2_t pos = vec2_scale(vec2(WIDTH * SCALE, 0), 0.5f);
 
       render_text(

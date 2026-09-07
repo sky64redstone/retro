@@ -12,7 +12,7 @@
 #define BOARD_HEIGHT 20
 #define BOARD_SCALE 32
 #define MAX_LENGTH (BOARD_WIDTH * BOARD_HEIGHT)
-#define SPEED_SEC 0.3f
+#define SPEED_SEC 0.2f
 
 static void snake_init(game_t* game, vec2_t win_size);
 static void snake_reset(game_t* game, vec2_t win_size);
@@ -116,6 +116,7 @@ static void snake_update(game_t* game, input_t* input, float dt) {
     case GAME_OVER:
     case GAME_WON: {
       if (input->pressed[KEY_ACTION]) {
+        game->state = GAME_RUNNING;
         game->reset(game, data->win_size);
       }
       break;
@@ -134,6 +135,8 @@ static void snake_render(game_t* game, SDL_Renderer* renderer) {
   assert(game->data);
 
   snake_data_t* data = (snake_data_t*)game->data;
+  float animation = data->accumulator / SPEED_SEC;
+  animation = animation < 0 ? 0 : animation > 1.f ? 1.f : animation;
   vec2_t size;
   vec2_t pos;
 
@@ -157,14 +160,46 @@ static void snake_render(game_t* game, SDL_Renderer* renderer) {
   pos = vec2_scale(data->food_pos, BOARD_SCALE);
   render_rect(renderer, pos, size, color_food);
 
+  /* TAIL */
+  {
+    vec2_t tail_pos = data->snake.body[data->snake.length - 1];
+    vec2_t tail_dir = vec2_sub(data->snake.body[data->snake.length - 2], tail_pos);
+    tail_pos = vec2_scale(tail_pos, BOARD_SCALE);
+    float diff = animation * BOARD_SCALE;
+    if (vec2_equal(tail_dir, vec2(1,0))) { /*right*/
+      tail_pos.x += diff;
+    } else if (vec2_equal(tail_dir, vec2(-1,0))) { /*left*/
+      tail_pos.x -= diff;
+    } else if (vec2_equal(tail_dir, vec2(0,1))) { /*down*/
+      tail_pos.y += diff;
+    } else if (vec2_equal(tail_dir, vec2(0,-1))) { /*up*/
+      tail_pos.y -= diff;
+    }
+    render_rect(renderer, tail_pos, size, color_body);
+  }
+
   /* BODY */
-  for (int i = 1; i < data->snake.length; i++) {
+  for (int i = 1; i < data->snake.length - 1; i++) {
     pos = vec2_scale(data->snake.body[i], BOARD_SCALE);
     render_rect(renderer, pos, size, color_body);
   }
 
   /* HEAD */
   pos = vec2_scale(data->snake.body[0], BOARD_SCALE);
+  switch (data->snake.dir) {
+    case UP:
+      pos.y += (1.f - animation) * BOARD_SCALE;
+      break;
+    case DOWN:
+      pos.y -= (1.f - animation) * BOARD_SCALE;
+      break;
+    case LEFT:
+      pos.x += (1.f - animation) * BOARD_SCALE;
+      break;
+    case RIGHT:
+      pos.x -= (1.f - animation) * BOARD_SCALE;
+      break;
+  }
   render_rect(renderer, pos, size, color_head);
 
   if (game->state != GAME_RUNNING) {
