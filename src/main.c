@@ -2,10 +2,11 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "vec.h"
 #include "games/snake.h"
 #include "games/pong.h"
 #include "games/tetris.h"
-#include "vec.h"
+#include "games/moonlander.h"
 
 struct game_template {
   const game_t* game;
@@ -26,6 +27,11 @@ struct game_template {
     &tetris_template,
     "Key 2: Tetris",
     SDL_SCANCODE_2
+  },
+  {
+    &moonlander_template,
+    "Key 3: Moonlander",
+    SDL_SCANCODE_3
   }
 };
 

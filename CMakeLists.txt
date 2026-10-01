@@ -20,6 +20,7 @@ add_executable(retro
   src/games/snake.c
   src/games/pong.c
   src/games/tetris.c
+  src/games/moonlander.c
 )
 
 target_include_directories(retro PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
