@@ -14,8 +14,7 @@
 #define TERRAIN_MAX_SLOPE 0.65f
 #define TERRAIN_POINTS 15
 
-#define STAR_SEED 0x5EED1234u
-#define STAR_DENSITY 500000.f
+#define STAR_DENSITY 1000000.f
 #define STAR_MIN_SIZE 1.f
 #define STAR_MAX_SIZE 4.f
 
@@ -66,6 +65,13 @@ typedef struct terrain_point {
   float y;
 } terrain_point_t;
 
+typedef struct moonlander_star {
+  float x;
+  float y;
+  float size;
+  color_t color;
+} moonlander_star_t;
+
 struct moonlander_data {
   struct {
     vec2_t pos;
@@ -80,6 +86,8 @@ struct moonlander_data {
   float pad_start;
   float pad_end;
   float pad_y;
+  moonlander_star_t* stars;
+  int star_count;
 };
 
 typedef struct moonlander_data moonlander_data_t;
@@ -89,13 +97,16 @@ static float moonlander_terrain_height(const moonlander_data_t* data, float x);
 static void moonlander_crash(game_t* game);
 static void moonlander_land(game_t* game);
 static float moonlander_wrap_angle(float angle);
-static void moonlander_render_stars(SDL_Renderer* renderer, moonlander_data_t* data);
+static void moonlander_render_stars(
+  SDL_Renderer* renderer, const moonlander_data_t* data
+);
 static float moonlander_randomf(float min, float max);
 static void moonlander_generate_terrain(moonlander_data_t* data);
+static void moonlander_generate_stars(moonlander_data_t* data);
 static uint32_t moonlander_star_hash(uint32_t value);
 static float moonlander_star_random(uint32_t value);
-static void moonlander_render_triangle(
-  SDL_Renderer* renderer, vec2_t pos, float angle,
+static void moonlander_render_ship(
+  SDL_Renderer* renderer, vec2_t pos, float sx, float cx,
   float width, float height, color_t color
 );
 static void moonlander_simulate(
@@ -119,7 +130,6 @@ static void moonlander_reset(game_t* game, vec2_t win_size) {
   assert(game);
   assert(game->data);
 
-  memset(game->data, 0, sizeof(moonlander_data_t));
   moonlander_data_init((moonlander_data_t*)game->data, win_size);
   game->state = GAME_RUNNING;
 }
@@ -172,15 +182,36 @@ static void moonlander_render(game_t* game, SDL_Renderer* renderer) {
   moonlander_render_stars(renderer, data);
 
   /* TERRAIN */
-  /* TODO replace this, its very inefficient */
+  /*
+   * x increases in fixed 4-pixel steps, so keep the active terrain segment
+   * instead of searching all terrain points for every rendered column.
+   */
+  const int last_terrain_segment = TERRAIN_POINTS - 2;
+  int terrain_segment = 0;
+  float terrain_y = data->terrain[0].y;
+  float terrain_slope =
+    (data->terrain[1].y - data->terrain[0].y) /
+    (data->terrain[1].x - data->terrain[0].x);
+
   for (int x = 0; x < (int)data->win_size.x; x += 4) {
-    float terrain_y = moonlander_terrain_height(data, (float)x);
+    while (terrain_segment < last_terrain_segment &&
+      (float)x > data->terrain[terrain_segment + 1].x) {
+      terrain_segment++;
+      const terrain_point_t a = data->terrain[terrain_segment];
+      const terrain_point_t b = data->terrain[terrain_segment + 1];
+      const float dx = (float)x - a.x;
+
+      terrain_y = a.y + (b.y - a.y) * dx / (b.x - a.x);
+      terrain_slope = (b.y - a.y) / (b.x - a.x);
+    }
+
     render_rect(
       renderer,
       vec2((float)x, terrain_y),
       vec2(4, data->win_size.y - terrain_y),
       color_terrain
     );
+    terrain_y += terrain_slope * 4.f;
   }
 
   /* LANDING PAD */
@@ -192,9 +223,12 @@ static void moonlander_render(game_t* game, SDL_Renderer* renderer) {
   );
 
   /* SHIP */
+  const float ship_sx = sinf(data->ship.angle);
+  const float ship_cx = cosf(data->ship.angle);
+
   if (data->thrusting && game->state == GAME_RUNNING) {
-    const float sx = sinf(data->ship.angle);
-    const float cx = cosf(data->ship.angle);
+    const float sx = ship_sx;
+    const float cx = ship_cx;
     const vec2_t flame_start = vec2(
       data->ship.pos.x - sx * 9.f,
       data->ship.pos.y + cx * 9.f
@@ -215,10 +249,11 @@ static void moonlander_render(game_t* game, SDL_Renderer* renderer) {
       flame_end.x, flame_end.y
     );
   }
-  moonlander_render_triangle(
+  moonlander_render_ship(
     renderer,
     data->ship.pos,
-    data->ship.angle,
+    ship_sx,
+    ship_cx,
     SHIP_WIDTH,
     SHIP_HEIGHT,
     color_ship
@@ -343,11 +378,15 @@ static void moonlander_destroy(game_t* game) {
   assert(game);
   assert(game->data);
 
-  free(game->data);
+  moonlander_data_t* data = (moonlander_data_t*)game->data;
+  free(data->stars);
+  free(data);
   game->data = NULL;
 }
 
 static void moonlander_data_init(moonlander_data_t* data, vec2_t win_size) {
+  free(data->stars);
+
   *data = (moonlander_data_t){
     .ship = {
       .pos = vec2(win_size.x * 0.2f, win_size.y * 0.18f),
@@ -358,12 +397,15 @@ static void moonlander_data_init(moonlander_data_t* data, vec2_t win_size) {
     .physics_accumulator = 0.f,
     .thrusting = 0,
     .win_size = win_size,
-    .pad_start = win_size.x * 0.80f,
-    .pad_end = win_size.x * 0.92f,
-    .pad_y = win_size.y * 0.76f
+    .pad_start = 0,
+    .pad_end = 0,
+    .pad_y = 0,
+    .stars = NULL,
+    .star_count = 0
   };
 
   moonlander_generate_terrain(data);
+  moonlander_generate_stars(data);
 }
 
 static void moonlander_simulate(
@@ -379,22 +421,24 @@ static void moonlander_simulate(
   }
   data->ship.angle = moonlander_wrap_angle(data->ship.angle);
 
-  vec2_t acceleration = vec2(0.f, GRAVITY);
   data->thrusting = input->down[KEY_UP] && data->fuel > 0.f;
+  data->ship.vel.y += GRAVITY * dt;
+
   if (data->thrusting) {
-    vec2_t thrust = vec2(
-      sinf(data->ship.angle) * THRUST,
-      -cosf(data->ship.angle) * THRUST
-    );
-    acceleration = vec2_add(acceleration, thrust);
+    const float sx = sinf(data->ship.angle);
+    const float cx = cosf(data->ship.angle);
+    const float thrust = THRUST * dt;
+
+    data->ship.vel.x += sx * thrust;
+    data->ship.vel.y -= cx * thrust;
     data->fuel -= FUEL_CONSUMPTION * dt;
     if (data->fuel < 0.f) {
       data->fuel = 0.f;
     }
   }
 
-  data->ship.vel = vec2_add(data->ship.vel, vec2_scale(acceleration, dt));
-  data->ship.pos = vec2_add(data->ship.pos, vec2_scale(data->ship.vel, dt));
+  data->ship.pos.x += data->ship.vel.x * dt;
+  data->ship.pos.y += data->ship.vel.y * dt;
 
   const float contact_y = data->ship.pos.y + SHIP_HEIGHT * 0.5f;
   const float terrain_y = moonlander_terrain_height(data, data->ship.pos.x);
@@ -456,12 +500,10 @@ static float moonlander_wrap_angle(float angle) {
   return angle;
 }
 
-static void moonlander_render_triangle(
-  SDL_Renderer* renderer, vec2_t pos, float angle,
+static void moonlander_render_ship(
+  SDL_Renderer* renderer, vec2_t pos, float sx, float cx,
   float width, float height, color_t color
 ) {
-  const float sx = sinf(angle);
-  const float cx = cosf(angle);
   const vec2_t dir = vec2(sx, -cx);
   const vec2_t side = vec2(cx, sx);
   const vec2_t nose = vec2_add(pos, vec2_scale(dir, height * 0.6f));
@@ -469,10 +511,8 @@ static void moonlander_render_triangle(
   const vec2_t left = vec2_add(base, vec2_scale(side, width * 0.5f));
   const vec2_t right = vec2_add(base, vec2_scale(side, -width * 0.5f));
 
-  SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-  SDL_RenderLine(renderer, nose.x, nose.y, left.x, left.y);
-  SDL_RenderLine(renderer, left.x, left.y, right.x, right.y);
-  SDL_RenderLine(renderer, right.x, right.y, nose.x, nose.y);
+  render_triangle(renderer, nose, left, right, (color_t){0,0,0,255});
+  draw_triangle(renderer, nose, left, right, color);
 }
 
 static float moonlander_randomf(float min, float max) {
@@ -616,56 +656,55 @@ static float moonlander_star_random(uint32_t value) {
   return (float)moonlander_star_hash(value) / (float)UINT32_MAX;
 }
 
-static void moonlander_render_stars(
-  SDL_Renderer* renderer,
-  moonlander_data_t* data
-) {
+static void moonlander_generate_stars(moonlander_data_t* data) {
   const float width = data->win_size.x;
   const float height = data->win_size.y;
-
   int count = (int)((width * height) / STAR_DENSITY);
 
   if (count < 32) {
     count = 32;
   }
 
-  color_t color;
+  data->stars = malloc((size_t)count * sizeof(*data->stars));
+  assert(data->stars);
+  data->star_count = count;
+
+  uint32_t star_seed = rand();
 
   for (int i = 0; i < count; i++) {
-    uint32_t index = (uint32_t)i;
+    const uint32_t index = (uint32_t)i;
+    const uint32_t position_seed = star_seed + index * 3u;
+    const float brightness = 140.f +
+      moonlander_star_random(star_seed + index * 7u + 3u) * 115.f;
 
-    float x = moonlander_star_random(
-      STAR_SEED + index * 3u
-    ) * width;
-
-    float y = moonlander_star_random(
-      STAR_SEED + index * 3u + 1u
-    ) * height * 0.65f;
-
-    float size = STAR_MIN_SIZE +
-    moonlander_star_random(
-      STAR_SEED + index * 3u + 2u
-    ) * (STAR_MAX_SIZE - STAR_MIN_SIZE);
-
-    uint32_t brightness = 140u +
-    (uint32_t)(
-      moonlander_star_random(
-        STAR_SEED + index * 7u + 3u
-      ) * 115.f
-    );
-
-    color = (color_t){
-      brightness,
-      brightness,
-      brightness,
-      255
+    data->stars[i] = (moonlander_star_t){
+      .x = moonlander_star_random(position_seed) * width,
+      .y = moonlander_star_random(position_seed + 1u) * height * 0.65f,
+      .size = STAR_MIN_SIZE +
+        moonlander_star_random(position_seed + 2u) *
+        (STAR_MAX_SIZE - STAR_MIN_SIZE),
+      .color = {
+        (uint8_t)brightness,
+        (uint8_t)brightness,
+        (uint8_t)brightness,
+        255
+      }
     };
+  }
+}
+
+static void moonlander_render_stars(
+  SDL_Renderer* renderer,
+  const moonlander_data_t* data
+) {
+  for (int i = 0; i < data->star_count; i++) {
+    const moonlander_star_t* star = &data->stars[i];
 
     render_rect(
       renderer,
-      vec2(x, y),
-                vec2_splat(size),
-                color
+      vec2(star->x, star->y),
+      vec2_splat(star->size),
+      star->color
     );
   }
 }
