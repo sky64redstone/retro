@@ -16,6 +16,7 @@ add_executable(retro
   src/vec.c
   src/graphics.c
   src/collision.c
+  src/menu.c
 
   src/games/snake.c
   src/games/pong.c

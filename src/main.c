@@ -3,36 +3,38 @@
 #include <string.h>
 
 #include "vec.h"
+#include "menu.h"
 #include "games/snake.h"
 #include "games/pong.h"
 #include "games/tetris.h"
 #include "games/moonlander.h"
 
-struct game_template {
-  const game_t* game;
-  const char* menu_name;
-  const SDL_Scancode scancode;
-} games[] = {
+static const menu_item_t game_menu_items[] = {
   {
-    &snake_template,
-    "Key 0: Snake",
-    SDL_SCANCODE_0
+    .text = "Snake",
+    .data = &snake_template
   },
   {
-    &pong_template,
-    "Key 1: Pong",
-    SDL_SCANCODE_1
+    .text = "Pong",
+    .data = &pong_template
   },
   {
-    &tetris_template,
-    "Key 2: Tetris",
-    SDL_SCANCODE_2
+    .text = "Tetris",
+    .data = &tetris_template
   },
   {
-    &moonlander_template,
-    "Key 3: Moonlander",
-    SDL_SCANCODE_3
+    .text = "Moonlander",
+    .data = &moonlander_template
   }
+};
+
+static menu_t game_menu = {
+  .title = "Retro Games",
+  .items = game_menu_items,
+  .item_count = sizeof(game_menu_items) / sizeof(game_menu_items[0]),
+  .selected = 0,
+  .style = NULL,
+  .render = NULL
 };
 
 static enum key key_from_scancode(SDL_Scancode scancode) {
@@ -62,6 +64,22 @@ static enum key key_from_scancode(SDL_Scancode scancode) {
 
     default:
       return KEY_COUNT;
+  }
+}
+
+static enum button button_from_sdl(Uint8 button) {
+  switch (button) {
+    case SDL_BUTTON_LEFT:
+      return BUTTON_LEFT;
+
+    case SDL_BUTTON_MIDDLE:
+      return BUTTON_MIDDLE;
+
+    case SDL_BUTTON_RIGHT:
+      return BUTTON_RIGHT;
+
+    default:
+      return BUTTON_COUNT;
   }
 }
 
@@ -103,9 +121,13 @@ int main(int argc, char** argv) {
   Uint64 previous_time = SDL_GetTicksNS();
   memset(&input, 0, sizeof(input_t));
 
+  menu_init(&game_menu);
+
   while (running) {
     memset(&input.pressed, false, KEY_COUNT * sizeof(bool));
     memset(&input.released, false, KEY_COUNT * sizeof(bool));
+    memset(&input.mouse.pressed, false, sizeof(input.mouse.pressed));
+    memset(&input.mouse.released, false, sizeof(input.mouse.released));
     while (SDL_PollEvent(&event)) {
       switch (event.type) {
         case SDL_EVENT_QUIT: {
@@ -120,33 +142,15 @@ int main(int argc, char** argv) {
               input.pressed[k] = true;
             }
             input.down[k] = true;
-          } else {
-            /* TODO cleanup */
-            if (menu) {
-              for (int i = 0; i < sizeof(games) / sizeof(struct game_template); i++) {
-                if (event.key.scancode == games[i].scancode) {
-                  memcpy(&game, games[i].game, sizeof(game_t));
-                  menu = false;
-                  break;
-                }
-              }
-              if (!menu) {
-                game.init(&game, win_size);
-                /* reenable vsync */
-                if (!SDL_SetRenderVSync(renderer, 1)) {
-                  SDL_Log("Warning: Failed to enable VSync 1: %s", SDL_GetError());
-                }
-              }
-              break;
-            }
+          } else if (event.key.scancode == SDL_SCANCODE_BACKSPACE && !menu) {
+            game.destroy(&game);
+            menu = true;
 
-            if (event.key.scancode == SDL_SCANCODE_BACKSPACE && !menu) {
-              game.destroy(&game);
-              menu = true;
-              /* render only at a fourth of the display refresh rate */
-              if (!SDL_SetRenderVSync(renderer, 4)) {
-                SDL_Log("Warning: Failed to enable VSync 4: %s", SDL_GetError());
-              }
+            if (!SDL_SetRenderVSync(renderer, 4)) {
+              SDL_Log(
+                "Warning: Failed to enable VSync 4: %s",
+                SDL_GetError()
+              );
             }
           }
           break;
@@ -158,6 +162,46 @@ int main(int argc, char** argv) {
             input.down[k] = false;
             input.released[k] = true;
           }
+          break;
+        }
+        case SDL_EVENT_MOUSE_MOTION: {
+          input.mouse.position = vec2(
+            event.motion.x,
+            event.motion.y
+          );
+          break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+          enum button button = button_from_sdl(event.button.button);
+
+          input.mouse.position = vec2(
+            event.button.x,
+            event.button.y
+          );
+
+          if (button != BUTTON_COUNT) {
+            if (!input.mouse.down[button]) {
+              input.mouse.pressed[button] = true;
+            }
+
+            input.mouse.down[button] = true;
+          }
+
+          break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+          enum button button = button_from_sdl(event.button.button);
+
+          input.mouse.position = vec2(
+            event.button.x,
+            event.button.y
+          );
+
+          if (button != BUTTON_COUNT) {
+            input.mouse.down[button] = false;
+            input.mouse.released[button] = true;
+          }
+
           break;
         }
       }
@@ -173,29 +217,28 @@ int main(int argc, char** argv) {
     }
 
     if (menu) {
-      SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
-      SDL_RenderClear(renderer);
+      /* UPDATE */
+      menu_event_t event = menu_update(&game_menu, &input);
 
-      render_text(
-        renderer,
-        vec2(win_size.x * 0.125f, 10),
-        vec2_splat(4.f),
-        color_text,
-        "Retro Games",
-        ALIGN_MIDDLE
-      );
+      if (event.type == MENU_EVENT_ACTIVATE) {
+        const game_t* selected_game =
+        game_menu.items[event.index].data;
 
-      for (int i = 0; i < sizeof(games) / sizeof(struct game_template); i++) {
-        render_text(
-          renderer,
-          vec2(10, 75 + i * 15),
-          vec2_splat(2.f),
-          color_text,
-          games[i].menu_name,
-          ALIGN_LEFT
-        );
+        memcpy(&game, selected_game, sizeof(game_t));
+        menu = false;
+
+        game.init(&game, win_size);
+
+        if (!SDL_SetRenderVSync(renderer, 1)) {
+          SDL_Log(
+            "Warning: Failed to enable VSync 1: %s",
+            SDL_GetError()
+          );
+        }
       }
 
+      /* RENDER */
+      menu_render(&game_menu, renderer, win_size);
     } else {
       game.update(&game, &input, delta_time);
 
