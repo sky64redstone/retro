@@ -6,6 +6,15 @@
 #include "pong.h"
 #include "menu.h"
 
+#define PONG_BOT_EASY_REACTION 0.20f
+#define PONG_BOT_EASY_DEADZONE 12.0f
+
+#define PONG_BOT_NORMAL_REACTION 0.10f
+#define PONG_BOT_NORMAL_DEADZONE 6.0f
+
+#define PONG_BOT_HARD_REACTION 0.10f
+#define PONG_BOT_HARD_DEADZONE 10.0f
+
 #define PONG_PLAYER_SPEED 200.0f
 #define PONG_INITIAL_BALL_SPEED 280.0f
 #define PONG_MAX_BALL_SPEED 420.0f
@@ -15,12 +24,6 @@
 #define PONG_MIN_SERVE_ANGLE (12.0f * 0.01745329251994329577f)
 #define PONG_MAX_SERVE_ANGLE (30.0f * 0.01745329251994329577f)
 #define PONG_SERVE_DELAY 0.55f
-#define PONG_BOT_EASY_REACTION 0.20f
-#define PONG_BOT_NORMAL_REACTION 0.10f
-#define PONG_BOT_HARD_REACTION 0.05f
-#define PONG_BOT_EASY_DEADZONE 12.0f
-#define PONG_BOT_NORMAL_DEADZONE 6.0f
-#define PONG_BOT_HARD_DEADZONE 2.0f
 #define PONG_BOT_CENTER_Y 0.5f
 #define PONG_BOT_TARGET_EPSILON 0.5f
 #define PONG_CENTER_LINE_SPACING 20
@@ -182,13 +185,15 @@ static void pong_update(game_t* game, input_t* input, float dt) {
     return;
   }
 
-  if (game->state == GAME_RUNNING && input->pressed[KEY_PAUSE]) {
-    game->state = GAME_PAUSED;
+  if (game->state == GAME_PAUSED) {
+    if (input->pressed[KEY_ACTION]) {
+      game->state = GAME_RUNNING;
+    }
     return;
   }
 
-  if (game->state == GAME_PAUSED && input->pressed[KEY_ACTION]) {
-    game->state = GAME_RUNNING;
+  if (game->state == GAME_RUNNING && input->pressed[KEY_PAUSE]) {
+    game->state = GAME_PAUSED;
     return;
   }
 
@@ -212,8 +217,7 @@ static void pong_update(game_t* game, input_t* input, float dt) {
   float remaining_dt = dt;
   while (remaining_dt > 0.0f) {
     const float step_dt = fminf(remaining_dt, 0.02f);
-    data->ball.pos =
-    vec2_add(data->ball.pos, vec2_scale(data->ball.vel, step_dt));
+    data->ball.pos = vec2_add(data->ball.pos, vec2_scale(data->ball.vel, step_dt));
 
     const float max_ball_y = data->win_size.y - data->ball.size.y;
     if (data->ball.pos.y <= 0.0f) {
@@ -387,8 +391,7 @@ static void pong_data_init(pong_data_t* data, vec2_t win_size) {
     .difficulty_menu = {
       .title = "PONG DIFFICULTY",
       .items = pong_difficulty_items,
-      .item_count =
-      sizeof(pong_difficulty_items) / sizeof(pong_difficulty_items[0]),
+      .item_count = sizeof(pong_difficulty_items) / sizeof(pong_difficulty_items[0]),
       .selected = PONG_DIFFICULTY_NORMAL,
       .style = NULL,
       .render = NULL
