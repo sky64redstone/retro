@@ -128,6 +128,7 @@ int main(int argc, char** argv) {
     memset(&input.released, false, KEY_COUNT * sizeof(bool));
     memset(&input.mouse.pressed, false, sizeof(input.mouse.pressed));
     memset(&input.mouse.released, false, sizeof(input.mouse.released));
+    input.mouse.moved = false;
     while (SDL_PollEvent(&event)) {
       switch (event.type) {
         case SDL_EVENT_QUIT: {
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
             event.motion.x,
             event.motion.y
           );
+          input.mouse.moved = true;
           break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {

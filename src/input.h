@@ -23,6 +23,7 @@ enum button {
 
 struct input_mouse {
   vec2_t position;
+  bool moved;
 
   bool down[BUTTON_COUNT];
   bool pressed[BUTTON_COUNT];

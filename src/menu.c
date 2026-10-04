@@ -171,15 +171,18 @@ menu_event_t menu_update(
   }
 
   const menu_style_t* style = menu_get_style(menu);
-  size_t mouse_item = menu_item_at_mouse(menu, style, input->mouse.position);
 
-  if (mouse_item < menu->item_count) {
-    menu->selected = mouse_item;
+  if (input->mouse.moved) {
+    size_t mouse_item = menu_item_at_mouse(menu, style, input->mouse.position);
 
-    if (input->mouse.pressed[BUTTON_LEFT]) {
-      event.type = MENU_EVENT_ACTIVATE;
-      event.index = menu->selected;
-      return event;
+    if (mouse_item < menu->item_count) {
+      menu->selected = mouse_item;
+
+      if (input->mouse.pressed[BUTTON_LEFT]) {
+        event.type = MENU_EVENT_ACTIVATE;
+        event.index = menu->selected;
+        return event;
+      }
     }
   }
 
