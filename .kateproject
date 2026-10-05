@@ -1,0 +1,12 @@
+{
+  "build": {
+    "directory": "./build",
+    "targets": [
+      {
+        "name": "CMake",
+        "build_cmd": "make",
+        "run_cmd": "./retro"
+      }
+    ]
+  }
+}
