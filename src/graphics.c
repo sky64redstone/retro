@@ -18,20 +18,27 @@ void render_rect(SDL_Renderer* renderer, vec2_t pos, vec2_t size, color_t color)
 void render_triangle(
   SDL_Renderer* renderer, vec2_t a, vec2_t b, vec2_t c, color_t color
 ) {
+  SDL_FColor vertex_color = {
+    color.r / 255.0f,
+    color.g / 255.0f,
+    color.b / 255.0f,
+    color.a / 255.0f
+  };
+
   SDL_Vertex verts[] = {
     {
       .position = { a.x, a.y },
-      .color = { color.r, color.g, color.b, color.a },
+      .color = vertex_color,
       .tex_coord = { 0.0f, 0.0f }
     },
     {
       .position = { b.x, b.y },
-      .color = { color.r, color.g, color.b, color.a },
+      .color = vertex_color,
       .tex_coord = { 0.0f, 0.0f }
     },
     {
       .position = { c.x, c.y },
-      .color = { color.r, color.g, color.b, color.a },
+      .color = vertex_color,
       .tex_coord = { 0.0f, 0.0f }
     }
   };

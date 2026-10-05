@@ -11,7 +11,7 @@
 
 #define TERRAIN_MIN_Y 0.62f
 #define TERRAIN_MAX_Y 0.88f
-#define TERRAIN_MAX_SLOPE 0.65f
+#define TERRAIN_MAX_SLOPE 0.45f
 #define TERRAIN_POINTS 15
 
 #define STAR_DENSITY 1000000.f
@@ -60,11 +60,6 @@ const struct game moonlander_template = {
   .color_bg = color_background
 };
 
-typedef struct terrain_point {
-  float x;
-  float y;
-} terrain_point_t;
-
 typedef struct moonlander_star {
   float x;
   float y;
@@ -78,7 +73,7 @@ struct moonlander_data {
     vec2_t vel;
     float angle;
   } ship;
-  terrain_point_t terrain[TERRAIN_POINTS];
+  vec2_t terrain[TERRAIN_POINTS];
   float fuel;
   float physics_accumulator;
   int thrusting;
@@ -182,36 +177,17 @@ static void moonlander_render(game_t* game, SDL_Renderer* renderer) {
   moonlander_render_stars(renderer, data);
 
   /* TERRAIN */
-  /*
-   * x increases in fixed 4-pixel steps, so keep the active terrain segment
-   * instead of searching all terrain points for every rendered column.
-   */
-  const int last_terrain_segment = TERRAIN_POINTS - 2;
-  int terrain_segment = 0;
-  float terrain_y = data->terrain[0].y;
-  float terrain_slope =
-    (data->terrain[1].y - data->terrain[0].y) /
-    (data->terrain[1].x - data->terrain[0].x);
-
-  for (int x = 0; x < (int)data->win_size.x; x += 4) {
-    while (terrain_segment < last_terrain_segment &&
-      (float)x > data->terrain[terrain_segment + 1].x) {
-      terrain_segment++;
-      const terrain_point_t a = data->terrain[terrain_segment];
-      const terrain_point_t b = data->terrain[terrain_segment + 1];
-      const float dx = (float)x - a.x;
-
-      terrain_y = a.y + (b.y - a.y) * dx / (b.x - a.x);
-      terrain_slope = (b.y - a.y) / (b.x - a.x);
-    }
-
-    render_rect(
-      renderer,
-      vec2((float)x, terrain_y),
-      vec2(4, data->win_size.y - terrain_y),
-      color_terrain
+  for (int i = 0; i < TERRAIN_POINTS - 1; i++) {
+    const vec2_t a = data->terrain[i];
+    const vec2_t b = data->terrain[i + 1];
+    const vec2_t c = vec2(b.x, data->win_size.y);
+    const vec2_t d = vec2(a.x, data->win_size.y);
+    render_triangle(
+      renderer, a, b, c, color_terrain
     );
-    terrain_y += terrain_slope * 4.f;
+    render_triangle(
+      renderer, a, c, d, color_terrain
+    );
   }
 
   /* LANDING PAD */
@@ -472,8 +448,8 @@ static float moonlander_terrain_height(
     return data->terrain[0].y;
   }
   for (int i = 0; i < TERRAIN_POINTS - 1; i++) {
-    const terrain_point_t a = data->terrain[i];
-    const terrain_point_t b = data->terrain[i + 1];
+    const vec2_t a = data->terrain[i];
+    const vec2_t b = data->terrain[i + 1];
     if (x <= b.x) {
       const float t = (x - a.x) / (b.x - a.x);
       return a.y + (b.y - a.y) * t;
@@ -554,12 +530,12 @@ static void moonlander_generate_terrain(moonlander_data_t* data) {
    * These two points are consecutive, so the interpolation code will
    * always produce a completely flat landing zone.
    */
-  data->terrain[pad_start_index] = (terrain_point_t){
+  data->terrain[pad_start_index] = (vec2_t){
     data->pad_start,
     data->pad_y
   };
 
-  data->terrain[pad_end_index] = (terrain_point_t){
+  data->terrain[pad_end_index] = (vec2_t){
     data->pad_end,
     data->pad_y
   };
@@ -596,7 +572,7 @@ static void moonlander_generate_terrain(moonlander_data_t* data) {
 
     const float y = moonlander_randomf(min_y, max_y);
 
-    data->terrain[i] = (terrain_point_t){ x, y };
+    data->terrain[i] = (vec2_t){ x, y };
 
     next_x = x;
     next_y = y;
@@ -636,7 +612,7 @@ static void moonlander_generate_terrain(moonlander_data_t* data) {
     const float y = moonlander_randomf(min_y, max_y);
 
     data->terrain[pad_end_index + 1 + i] =
-    (terrain_point_t){ x, y };
+    (vec2_t){ x, y };
 
     next_x = x;
     next_y = y;
